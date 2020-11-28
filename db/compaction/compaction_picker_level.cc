@@ -420,6 +420,11 @@ bool LevelCompactionBuilder::PickFileToCompact() {
 
   assert(start_level_ >= 0);
 
+  if (ioptions_.compaction_pri == kReads) {
+    // Also sort the files to be compacted with this compaction priority
+    vstorage_->UpdateFilesByCompactionPri(ioptions_.compaction_pri);
+  }
+
   // Pick the largest file in this level that is not already
   // being compacted
   const std::vector<int>& file_size =

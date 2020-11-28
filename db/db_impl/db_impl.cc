@@ -1589,6 +1589,10 @@ Status DBImpl::Get(const ReadOptions& read_options,
 Status DBImpl::Get(const ReadOptions& read_options,
                    ColumnFamilyHandle* column_family, const Slice& key,
                    PinnableSlice* value, std::string* timestamp) {
+  
+  std::string keyy;
+  key.DecodeHex(&keyy);
+  // printf("Trying to get value for key %s \n", keyy.c_str());
   GetImplOptions get_impl_options;
   get_impl_options.column_family = column_family;
   get_impl_options.value = value;

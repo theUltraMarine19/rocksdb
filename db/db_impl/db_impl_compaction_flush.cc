@@ -23,6 +23,10 @@
 
 namespace ROCKSDB_NAMESPACE {
 
+int deletion_compaction_count_ = 0;
+int compaction_trivial_move_count_ = 0;
+int background_compaction_count_ = 0;
+
 bool DBImpl::EnoughRoomForCompaction(
     ColumnFamilyData* cfd, const std::vector<CompactionInputFiles>& inputs,
     bool* sfm_reserved_compact_space, LogBuffer* log_buffer) {
@@ -2830,6 +2834,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
+    deletion_compaction_count_ += 1;
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Started deletion compaction, count:%d", deletion_compaction_count_);
 
     for (const auto& f : *c->inputs(0)) {
       c->edit()->DeleteFile(c->level(), f->fd.GetNumber());
@@ -2862,6 +2868,9 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
+    compaction_trivial_move_count_ += 1;
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Time: %lu, Compaction trivial move start: %d",
+     env_->NowMicros(), compaction_trivial_move_count_);
 
     // Move files to next level
     int32_t moved_files = 0;
@@ -2920,6 +2929,9 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
 
     // Clear Instrument
     ThreadStatusUtil::ResetThreadStatus();
+    compaction_trivial_move_count_ -= 1;
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Time: %lu, Compaction trivial move end: %d",
+     env_->NowMicros(), compaction_trivial_move_count_);
     TEST_SYNC_POINT_CALLBACK("DBImpl::BackgroundCompaction:AfterCompaction",
                              c->column_family_data());
   } else if (!is_prepicked && c->output_level() > 0 &&
@@ -2974,6 +2986,9 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
+    background_compaction_count_ += 1;
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Time: %lu, Background compaction start: %d at level %d",
+     env_->NowMicros(), background_compaction_count_, output_level);
     mutex_.Unlock();
     TEST_SYNC_POINT_CALLBACK(
         "DBImpl::BackgroundCompaction:NonTrivial:BeforeRun", nullptr);
@@ -2990,6 +3005,9 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
                                          *c->mutable_cf_options());
     }
     *made_progress = true;
+    background_compaction_count_ -= 1;
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Time: %lu, Background compaction end: %d at level %d",
+     env_->NowMicros(), background_compaction_count_, output_level);
     TEST_SYNC_POINT_CALLBACK("DBImpl::BackgroundCompaction:AfterCompaction",
                              c->column_family_data());
   }
@@ -3012,7 +3030,6 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       sfm->OnCompactionCompletion(c.get());
     }
 #endif  // ROCKSDB_LITE
-
     NotifyOnCompactionCompleted(c->column_family_data(), c.get(), status,
                                 compaction_job_stats, job_context->job_id);
   }

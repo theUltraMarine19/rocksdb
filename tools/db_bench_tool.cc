@@ -2807,7 +2807,10 @@ class Benchmark {
   //     |        key 00000         |
   //     ----------------------------
   void GenerateKeyFromInt(uint64_t v, int64_t num_keys, Slice* key) {
+    // printf("In generatekeyfromint key_rand:%lu, num_keys:%ld, key:%s, key_size:%lu \n",
+    // v, num_keys, key->data(), key->size());
     if (!keys_.empty()) {
+      printf("Keys_ list is not empty");
       assert(FLAGS_use_existing_keys);
       assert(keys_.size() == static_cast<size_t>(num_keys));
       assert(v < static_cast<uint64_t>(num_keys));
@@ -2846,6 +2849,7 @@ class Benchmark {
     if (key_size_ > pos - start) {
       memset(pos, '0', key_size_ - (pos - start));
     }
+    // printf("The key generated is %s with size %lu\n", key->data(), key->size());
   }
 
   void GenerateKeyFromIntForSeek(uint64_t v, int64_t num_keys, Slice* key) {
@@ -4464,6 +4468,7 @@ class Benchmark {
           }
 #endif  //  ROCKSDB_LITE
         } else if (FLAGS_num_column_families <= 1) {
+          // printf("In writerandom and the key is %s \n", key.data());
           batch.Put(key, val);
         } else {
           // We use same rand_num as seed for key and column family so that we
@@ -5149,10 +5154,12 @@ class Benchmark {
       }
       Status s;
       if (FLAGS_num_column_families > 1) {
+        printf("Readrandom with more CF %s \n", key.data());
         s = db_with_cfh->db->Get(options, db_with_cfh->GetCfh(key_rand), key,
                                  &pinnable_val, ts_ptr);
       } else {
         pinnable_val.Reset();
+        // printf("Readrandom with one CF %s \n", key.data());
         s = db_with_cfh->db->Get(options,
                                  db_with_cfh->db->DefaultColumnFamily(), key,
                                  &pinnable_val, ts_ptr);
