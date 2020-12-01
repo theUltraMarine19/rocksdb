@@ -2078,6 +2078,7 @@ class Stats {
                   (now - last_report_finish_) / 1000000.0,
                   (now - start_) / 1000000.0);
 
+          printf("done, last_done, usecs %lu, %lu, %ld\n", done_, last_report_done_, usecs_since_last);
           cur_ops_interval = (done_ - last_report_done_) /
                   (usecs_since_last / 1000000.0);
 
@@ -3177,6 +3178,7 @@ class Benchmark {
         method = &Benchmark::WriteSeq;
       } else if (name == "fillrandom") {
         fresh_db = true;
+        method = &Benchmark::WriteRandom;
       } else if (name == "longpeak") {
         method = &Benchmark::LongPeakTest;
       } else if (name == "filluniquerandom") {
@@ -4454,7 +4456,7 @@ class Benchmark {
   }
 
   void LongPeakTest(ThreadState* thread) {
-    printf("Starting LongPeakTest test\n");
+    printf("Starting LongPeakTest test with thread id: %d\n", thread->tid);
 
     ReadOptions options(FLAGS_verify_checksum, true);
     RandomGenerator gen;
@@ -4474,6 +4476,7 @@ class Benchmark {
     // while (FLAGS_env->NowMicros() < start_time + FLAGS_duration*1000000) {
     while (!duration.Done(1)) {
         DB* db = SelectDB(thread);
+        db->GetOptions().rate_limiter->SetBytesPerSecond(FLAGS_rate_limiter_bytes_per_sec);
         if (!thread->init){
             if(thread->tid != 0 ){
                 //
@@ -4494,6 +4497,7 @@ class Benchmark {
             // //check the current bandwidth for user operations 
             long cur_throughput = thread->shared->cur_ops_interval * 8 ; // 8 worker threads
             long cur_bandwidth_user_ops_MBPS = cur_throughput * FLAGS_value_size / 1000000;
+            printf("Current throughput and bandwidth %lu %lu\n", cur_throughput, cur_bandwidth_user_ops_MBPS);
 
             // SILK TESTING the Pause compaction work functionality
             // if (!pausedcompaction && cur_bandwidth_user_ops_MBPS > 150){
@@ -4599,7 +4603,7 @@ class Benchmark {
                         thread->shared->cur_ops_interval = curops;
                     }
 
-                } else{
+                } else {
                     Status s = db->Get(options, key, &value);
                     reads_done++;
                     long curops =  thread->stats.FinishedOpsQUEUES(nullptr, db, 1, (pair_val_time.second).count(), kRead);
