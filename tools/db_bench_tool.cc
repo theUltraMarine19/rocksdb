@@ -4503,9 +4503,11 @@ class Benchmark {
                 exit(1);
             }
             writes_done++;
+            thread->stats.FinishedOps(nullptr, db, 1, kWrite);
         } else {
             Status s = db->Get(options, key, &value);
             reads_done++;
+            thread->stats.FinishedOps(nullptr, db, 1, kRead);
         }
     }
     printf("Writes done, reads done %lu, %lu", writes_done, reads_done);

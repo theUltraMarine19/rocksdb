@@ -2934,7 +2934,7 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
       case kReads:
         std::sort(temp.begin(), temp.end(),
                   [](const Fsize& f1, const Fsize& f2) -> bool {
-                    printf("F1 reads: %lu, F2 reads: %lu\n", f1.file->stats.num_reads_sampled.load(), 
+                    // printf("F1 reads: %lu, F2 reads: %lu\n", f1.file->stats.num_reads_sampled.load(), 
                     f2.file->stats.num_reads_sampled.load());
                     return f1.file->stats.num_reads_sampled <
                            f2.file->stats.num_reads_sampled;
