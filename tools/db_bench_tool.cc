@@ -91,6 +91,7 @@ DEFINE_string(
     "fillseqdeterministic,"
     "fillsync,"
     "fillrandom,"
+    "fillrandomcustom,"
     "filluniquerandomdeterministic,"
     "overwrite,"
     "readrandom,"
@@ -3179,7 +3180,11 @@ class Benchmark {
       } else if (name == "fillrandom") {
         fresh_db = true;
         method = &Benchmark::WriteRandom;
-      } else if (name == "longpeak") {
+      } else if (name == "fillrandomcustom") {
+        fresh_db = true;
+        method = &Benchmark::FillRandomCustom;
+      }
+      else if (name == "longpeak") {
         method = &Benchmark::LongPeakTest;
       } else if (name == "filluniquerandom") {
         fresh_db = true;
@@ -4455,12 +4460,63 @@ class Benchmark {
     }
   }
 
-  void LongPeakTest(ThreadState* thread) {
-    printf("Starting LongPeakTest test with thread id: %d\n", thread->tid);
+  void FillRandomCustom(ThreadState* thread) {
+    printf("Starting FillRandomCustom test with thread id: %d\n", thread->tid);
 
     ReadOptions options(FLAGS_verify_checksum, true);
     RandomGenerator gen;
-    Duration duration(FLAGS_duration, readwrites_, 1);
+    Duration duration(FLAGS_duration, readwrites_);
+    std::string value;
+    long writes_done = 0;
+    long reads_done = 0;
+
+    DB* db = SelectDB(thread);
+    db->GetOptions().rate_limiter->SetBytesPerSecond(FLAGS_rate_limiter_bytes_per_sec);
+    // if (!thread->init){ 
+    //     thread->init = true;
+    // }
+    while (!duration.Done(1)) {
+        int val_size = FLAGS_value_size;;
+        std::chrono::microseconds ms = std::chrono::duration_cast< std::chrono::milliseconds >
+        (std::chrono::system_clock::now().time_since_epoch());
+    
+        std::pair<int, std::chrono::microseconds> pair_val_time(val_size, ms);
+
+        std::unique_ptr<const char[]> key_guard;
+        Slice key = AllocateKey(&key_guard);
+
+        std::string a;
+        int rand_key = thread->rand.Next() % FLAGS_num;
+
+        //GenerateKeyFromInt(rand_key, FLAGS_num, &key);
+        a = std::to_string(rand_key);
+        a += '\0';
+        key = Slice(a.c_str()); 
+        // printf("key is: %s\n", key.ToString().c_str());
+
+        int op_prob = thread->rand.Next() % 100;
+
+        if (op_prob < 50) {
+            Status s = db->Put(write_options_, key, gen.Generate(pair_val_time.first));
+            if (!s.ok()) {
+                fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+                exit(1);
+            }
+            writes_done++;
+        } else {
+            Status s = db->Get(options, key, &value);
+            reads_done++;
+        }
+    }
+    printf("Writes done, reads done %lu, %lu", writes_done, reads_done);
+}
+
+void LongPeakTest(ThreadState* thread) {
+    printf("Starting LongPeakTest test\n");
+
+    ReadOptions options(FLAGS_verify_checksum, true);
+    RandomGenerator gen;
+    Duration duration(FLAGS_duration, readwrites_);
     std::string value;
     long vals_generated = 0;
     long writes_done = 0;
@@ -4472,11 +4528,8 @@ class Benchmark {
 
     int steady_workload_time = 0;
 
-    // double start_time = FLAGS_env->NowMicros();
-    // while (FLAGS_env->NowMicros() < start_time + FLAGS_duration*1000000) {
     while (!duration.Done(1)) {
         DB* db = SelectDB(thread);
-        db->GetOptions().rate_limiter->SetBytesPerSecond(FLAGS_rate_limiter_bytes_per_sec);
         if (!thread->init){
             if(thread->tid != 0 ){
                 //
@@ -4489,15 +4542,15 @@ class Benchmark {
             }  
             thread->init = true;
         }
+
+
         // thread tid=0 SILK thread. Responsible for dynamic compaction bandiwdth. 
         
         if (thread->tid == 0){
-            // printf("In thread 0\n");
             
             // //check the current bandwidth for user operations 
             long cur_throughput = thread->shared->cur_ops_interval * 8 ; // 8 worker threads
             long cur_bandwidth_user_ops_MBPS = cur_throughput * FLAGS_value_size / 1000000;
-            printf("Current throughput and bandwidth %lu %lu\n", cur_throughput, cur_bandwidth_user_ops_MBPS);
 
             // SILK TESTING the Pause compaction work functionality
             // if (!pausedcompaction && cur_bandwidth_user_ops_MBPS > 150){
@@ -4510,6 +4563,7 @@ class Benchmark {
             //     db->ContinueCompactionWork();
             //     pausedcompaction = false;
             // }
+
 
             long cur_bandiwdth_compaction_MBPS = 200 - cur_bandwidth_user_ops_MBPS; //measured 200MB/s SSD bandwidth on XEON.
             if (cur_bandiwdth_compaction_MBPS < 10) {
@@ -4552,23 +4606,25 @@ class Benchmark {
         } else if (thread->tid == 14){
           // throughput fluctuation thread.
             
-            int sleep_time = 1000000;
-            if (steady_workload_time > 0){
+            int sleep_time = 10000000;
+            if (steady_workload_time > 200){
                 if (thread->shared->send_low_workload == 1){
                     thread->shared->send_low_workload = 0;
                     printf("... thread 0 Switched to FAST workload\n");
-                    sleep_time = 5000000; // 5s peak
+                    sleep_time = 50000000; // 50s peak
                 }
                 else{
                     thread->shared->send_low_workload = 1;
                     printf("... thread 0 Switched to SLOW workload\n");
-                    sleep_time = 5000000; // 5s time between peaks
+                    sleep_time = 10000000; // 10s time between peaks
                 }
             }
-            steady_workload_time += 1;
+            steady_workload_time += 10;
             
-            std::this_thread::sleep_for(std::chrono::microseconds(sleep_time)); //sleep for 1s
-        } else {
+            std::this_thread::sleep_for(std::chrono::microseconds(sleep_time)); //sleep for 10s
+            
+
+        }else {
             //Worker thread
             //if my queue isn't empty, I pop the first element and I perform an operation on the DB 
             if (!thread->shared->op_queues[cur_queue][thread->tid - 1].empty()){
@@ -4603,7 +4659,7 @@ class Benchmark {
                         thread->shared->cur_ops_interval = curops;
                     }
 
-                } else {
+                } else{
                     Status s = db->Get(options, key, &value);
                     reads_done++;
                     long curops =  thread->stats.FinishedOpsQUEUES(nullptr, db, 1, (pair_val_time.second).count(), kRead);
@@ -4615,8 +4671,10 @@ class Benchmark {
 
             }
             cur_queue = (cur_queue + 1)%5;
+
         }
     }
+
 }
 
   enum WriteMode {
