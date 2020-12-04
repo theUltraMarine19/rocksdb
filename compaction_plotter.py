@@ -41,37 +41,45 @@ def parse_compaction_event(lines, start_time):
             line = line[index:]
             line = json.loads(line)
             d[line["job"]].append(line)
+    
+    job_to_level = {}
+    for compaction in d:
+        job_to_level[compaction] = d[compaction][1]["output_level"]-1
         
     # for compaction in d:
     #     print(d[compaction])
     #     print("\n\n")
 
-    times = []
-    y = []
+    level_wise_comps, times, y = {}, [], []
     count, start_time, first = 0, 0, True
+    for level in range(7):
+        level_wise_comps[level] = {"times":[], "y":[]}
     for line in lines:
         if "compaction_started" in line:
             index = line.find("{")
             line = line[index:]
             line = json.loads(line)
-            time = line["time_micros"] 
+            time, level = line["time_micros"], job_to_level[line["job"]]
             count += 1
             if first:
                 start_time = time
                 first = False
-            times.append((time-start_time)/1000000)
-            y.append(count)
+            level_wise_comps[level]["times"].append((time-start_time)/1000000)
+            level_wise_comps[level]["y"].append(count)
         if "compaction_finished" in line:
             index = line.find("{")
             line = line[index:]
             line = json.loads(line)
-            time = line["time_micros"]
+            time, level = line["time_micros"], job_to_level[line["job"]]
             count -= 1 
-            times.append((time-start_time)/1000000)
-            y.append(count)
+            level_wise_comps[level]["times"].append((time-start_time)/1000000)
+            level_wise_comps[level]["y"].append(count)
     
-    print(times)
-    print(y)
+    print(level_wise_comps[0])
+    print()
+    print(level_wise_comps[1])
+    print()
+    print(level_wise_comps[2])
 
     
 def print_lines(lines):
