@@ -2957,7 +2957,6 @@ class Benchmark {
     // printf("In generatekeyfromint key_rand:%lu, num_keys:%ld, key:%s, key_size:%lu \n",
     // v, num_keys, key->data(), key->size());
     if (!keys_.empty()) {
-      printf("Keys_ list is not empty");
       assert(FLAGS_use_existing_keys);
       assert(keys_.size() == static_cast<size_t>(num_keys));
       assert(v < static_cast<uint64_t>(num_keys));
@@ -2966,7 +2965,6 @@ class Benchmark {
     }
     char* start = const_cast<char*>(key->data());
     char* pos = start;
-    printf("keys per prefix: %ld\n", keys_per_prefix_);
     if (keys_per_prefix_ > 0) {
       int64_t num_prefix = num_keys / keys_per_prefix_;
       int64_t prefix = v % num_prefix;
@@ -2986,15 +2984,9 @@ class Benchmark {
     }
 
     int bytes_to_fill = std::min(key_size_ - static_cast<int>(pos - start), 8);
-    printf("bytes to fill %d\n", bytes_to_fill);
     if (port::kLittleEndian) {
-      printf("Klittleendian with v %lu\n", v);
       for (int i = 0; i < bytes_to_fill; ++i) {
-        printf("bytes to fill -i -1 << 3 %d\n", ((bytes_to_fill - i - 1) << 3));
-        printf("(v >> ((bytes_to_fill - i - 1) << 3)) %ld\n", (v >> ((bytes_to_fill - i - 1) << 3)));
-        printf("pos[i] %c\n", pos[i]);
         pos[i] = (v >> ((bytes_to_fill - i - 1) << 3)) & 0xFF;
-        printf("pos[i] %c\n", pos[i]);
       }
     } else {
       memcpy(pos, static_cast<void*>(&v), bytes_to_fill);
@@ -3003,16 +2995,6 @@ class Benchmark {
     if (key_size_ > pos - start) {
       memset(pos, '0', key_size_ - (pos - start));
     }
-    int i = 0;
-    char* data = const_cast<char*>(key->data());
-    while(i < (int)key->size()) {
-      printf("%s", data);
-      data += 1;
-      i += 1;
-    }
-    printf("\n");
-    printf("The key generated is %.*s\n", 8, const_cast<char*>(key->data()));
-    fflush(stdout);
   }
 
   void GenerateKeyFromIntForSeek(uint64_t v, int64_t num_keys, Slice* key) {
