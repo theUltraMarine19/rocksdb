@@ -44,42 +44,57 @@ def parse_compaction_event(lines, start_time):
     
     job_to_level = {}
     for compaction in d:
-        job_to_level[compaction] = d[compaction][1]["output_level"]-1
+        job_to_level[compaction] = d[compaction][1]["output_level"]
         
     # for compaction in d:
     #     print(d[compaction])
     #     print("\n\n")
 
-    level_wise_comps, times, y = {}, [], []
+    level_wise_comps, level_wise_counts, times, y = {}, {}, [], []
     count, start_time, first = 0, 0, True
     for level in range(7):
-        level_wise_comps[level] = {"times":[], "y":[]}
+        level_wise_comps[level] = {"times":[], "count":[], "compaction_time":[], "cpu_time":[], 
+        "num_output_files":[], "output_size":[], "input_records":[], "output_records":[]}
+        level_wise_counts[level] = 0
     for line in lines:
         if "compaction_started" in line:
             index = line.find("{")
             line = line[index:]
             line = json.loads(line)
             time, level = line["time_micros"], job_to_level[line["job"]]
-            count += 1
             if first:
                 start_time = time
                 first = False
+            level_wise_counts[level] += 1
             level_wise_comps[level]["times"].append((time-start_time)/1000000)
-            level_wise_comps[level]["y"].append(count)
+            level_wise_comps[level]["count"].append(level_wise_counts[level])
+            level_wise_comps[level]["compaction_time"].append(0)
+            level_wise_comps[level]["cpu_time"].append(0)
+            level_wise_comps[level]["num_output_files"].append(0)
+            level_wise_comps[level]["output_size"].append(0)
+            level_wise_comps[level]["input_records"].append(0)
+            level_wise_comps[level]["output_records"].append(0)
         if "compaction_finished" in line:
             index = line.find("{")
             line = line[index:]
             line = json.loads(line)
             time, level = line["time_micros"], job_to_level[line["job"]]
-            count -= 1 
+            level_wise_counts[level] -= 1
             level_wise_comps[level]["times"].append((time-start_time)/1000000)
-            level_wise_comps[level]["y"].append(count)
+            level_wise_comps[level]["count"].append(level_wise_counts[level])
+            level_wise_comps[level]["compaction_time"].append(line["compaction_time_micros"]/1000)
+            level_wise_comps[level]["cpu_time"].append(line["compaction_time_cpu_micros"]/1000)
+            level_wise_comps[level]["num_output_files"].append(line["num_output_files"])
+            level_wise_comps[level]["output_size"].append(line["total_output_size"]/(1024*1024))
+            level_wise_comps[level]["input_records"].append(line["num_input_records"])
+            level_wise_comps[level]["output_records"].append(line["num_output_records"])
     
-    print(level_wise_comps[0])
-    print()
-    print(level_wise_comps[1])
-    print()
-    print(level_wise_comps[2])
+    # print(level_wise_comps[0])
+    # print()
+    # print(level_wise_comps[1])
+    # print()
+    # print(level_wise_comps[2])
+    print(level_wise_comps)
 
     
 def print_lines(lines):
@@ -95,5 +110,5 @@ if __name__ == "__main__":
     # start_time = time.mktime(datetime.datetime.strptime(start_time, "%Y/%m/%d").timetuple())
     start_time = (datetime.datetime.strptime(start_time, "%Y/%m/%d-%H:%M:%S.%f") - datetime.datetime(1970, 1, 1)).total_seconds()*1000000
     # lines = parse_data_for_compactions(lines, start_time)
-    # print_lines(lines)
+    print_lines(lines)
     parse_compaction_event(lines, start_time)

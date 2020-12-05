@@ -2519,6 +2519,7 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
     WaitForIngestFile();
 
     num_running_compactions_++;
+    printf("Number of running compactions is: %d\n", num_running_compactions_);
 
     std::unique_ptr<std::list<uint64_t>::iterator>
         pending_outputs_inserted_elem(new std::list<uint64_t>::iterator(
