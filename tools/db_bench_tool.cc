@@ -4491,6 +4491,28 @@ class Benchmark {
             reads_done++;
             thread->stats.FinishedOps(nullptr, db, 1, kRead);
         }
+        if (seek) {
+            Iterator* iter_to_use = db->NewIterator(readoptions);
+            iter_to_use->Seek(key);
+            read++;
+            if (iter_to_use->Valid() && iter_to_use->key().compare(key) == 0) {
+              found++;
+            }
+
+            for (int j = 0; j < FLAGS_seek_nexts && iter_to_use->Valid(); ++j) {
+              // Copy out iterator's value to make sure we read them.
+              Slice value = iter_to_use->value();
+              // memcpy(value_buffer, value.data(),
+              //         std::min(value.size(), sizeof(value_buffer)));
+              bytes += iter_to_use->key().size() + iter_to_use->value().size();
+              iter_to_use->Next();
+              assert(iter_to_use->status().ok());
+            }
+            thread->stats.FinishedOps(nullptr, db, 1, kSeek);
+          }
+          // thread->stats.AddBytes(bytes);
+          // thread->stats.AddMessage(msg);
+        }
     }
     printf("Writes done, reads done %lu, %lu", writes_done, reads_done);
 }
