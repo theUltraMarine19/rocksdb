@@ -103,8 +103,8 @@ def print_lines(lines):
 
 if __name__ == "__main__":
     print("hello")
-    lines = read_file("/tmp/rocksdbtest-20001/dbbench/LOG")
-    # lines = read_file("/mydata/rocksdb/LOG")
+    # lines = read_file("/tmp/rocksdbtest-20001/dbbench/LOG")
+    lines = read_file("/mydata/rocksdb/LOG")
     start_time = lines[0].split()[0]
     
     # start_time = time.mktime(datetime.datetime.strptime(start_time, "%Y/%m/%d").timetuple())
