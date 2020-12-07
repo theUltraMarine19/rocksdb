@@ -4451,12 +4451,24 @@ class Benchmark {
     std::string value;
     long writes_done = 0;
     long reads_done = 0;
+    long range_reads_done = 0;
+    long seeks_found = 0;
+    char value_buffer[256];
+    int64_t write_bytes = 0;
+    int64_t read_bytes = 0;
+    int64_t seek_bytes = 0;
+    double write_time = 0;
+    double read_time = 0;
+    double seek_time = 0;
+    double start_time = 0;
+    double end_time = 0;
 
     DB* db = SelectDB(thread);
     db->GetOptions().rate_limiter->SetBytesPerSecond(FLAGS_rate_limiter_bytes_per_sec);
     // if (!thread->init){ 
     //     thread->init = true;
     // }
+    double workload_start_time = FLAGS_env->NowMicros();
     while (!duration.Done(1)) {
         int val_size = FLAGS_value_size;;
         std::chrono::microseconds ms = std::chrono::duration_cast< std::chrono::milliseconds >
@@ -4478,44 +4490,69 @@ class Benchmark {
 
         int op_prob = thread->rand.Next() % 100;
 
-        if (op_prob < 50) {
-            Status s = db->Put(write_options_, key, gen.Generate(pair_val_time.first));
+        if (op_prob < 33) {
+            start_time = FLAGS_env->NowMicros();
+            Slice val = gen.Generate(pair_val_time.first);
+            Status s = db->Put(write_options_, key, val);
             if (!s.ok()) {
                 fprintf(stderr, "put error: %s\n", s.ToString().c_str());
                 exit(1);
             }
+            end_time = FLAGS_env->NowMicros();
+            write_time += end_time - start_time;
+            write_bytes += key.size() + val.size();
             writes_done++;
             thread->stats.FinishedOps(nullptr, db, 1, kWrite);
-        } else {
+        } else if (op_prob >= 33 and op_prob < 67) {
+            start_time = FLAGS_env->NowMicros();
             Status s = db->Get(options, key, &value);
+            read_time += FLAGS_env->NowMicros() - start_time;
+            read_bytes += key.size() + value.size();
             reads_done++;
             thread->stats.FinishedOps(nullptr, db, 1, kRead);
-        }
-        if (seek) {
-            Iterator* iter_to_use = db->NewIterator(readoptions);
+        } else {
+            bool key_present = false;
+            int seek_bytes_local = 0;
+            Iterator* iter_to_use = db->NewIterator(options);
             iter_to_use->Seek(key);
-            read++;
+            range_reads_done++;
             if (iter_to_use->Valid() && iter_to_use->key().compare(key) == 0) {
-              found++;
+              seeks_found++;
+              key_present = true;
+              start_time = FLAGS_env->NowMicros();
             }
 
             for (int j = 0; j < FLAGS_seek_nexts && iter_to_use->Valid(); ++j) {
               // Copy out iterator's value to make sure we read them.
-              Slice value = iter_to_use->value();
-              // memcpy(value_buffer, value.data(),
-              //         std::min(value.size(), sizeof(value_buffer)));
-              bytes += iter_to_use->key().size() + iter_to_use->value().size();
+              Slice value1 = iter_to_use->value();
+              memcpy(value_buffer, value1.data(),
+                      std::min(value1.size(), sizeof(value_buffer)));
+              seek_bytes_local += iter_to_use->key().size() + iter_to_use->value().size();
               iter_to_use->Next();
               assert(iter_to_use->status().ok());
+            }
+
+            if (key_present) {
+              seek_time += FLAGS_env->NowMicros() - start_time;
+              seek_bytes += seek_bytes_local;
             }
             thread->stats.FinishedOps(nullptr, db, 1, kSeek);
           }
           // thread->stats.AddBytes(bytes);
           // thread->stats.AddMessage(msg);
         }
+        double workload_duration = (FLAGS_env->NowMicros() - workload_start_time) / 1000000;
+        printf("Writes done, reads done, total range reads, range reads done %lu, %lu, %lu, %lu\n", writes_done, reads_done, range_reads_done, seeks_found);
+        double write_throughput = writes_done / workload_duration;
+        double read_throughput = reads_done / workload_duration;
+        double range_read_throughput = seeks_found / seek_time;
+        double write_latency = write_time / writes_done;
+        double read_latency = read_time / reads_done;
+        double range_read_latency = seek_time / seeks_found;
+        printf("Write throughput (ops/s) = %f \nRead throughput (ops/s) = %f \nRange read throughput (ops/s) = %f\nWrite latency (micros/op) = %f \nRead latency (micros/op) = %f \nRange read latency (micros/op) = %f \n", write_throughput,
+        read_throughput, range_read_throughput, write_latency, read_latency, range_read_latency); 
     }
-    printf("Writes done, reads done %lu, %lu", writes_done, reads_done);
-}
+
 
 void LongPeakTest(ThreadState* thread) {
     printf("Starting LongPeakTest test\n");
