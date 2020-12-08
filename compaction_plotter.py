@@ -56,7 +56,8 @@ def parse_compaction_event(lines, start_time):
     for level in range(7):
         level_wise_comps[level] = {"times":[], "count":[], "compaction_time":[], "cpu_time":[], 
         "num_output_files":[], "output_size":[], "input_records":[], "output_records":[], "compacted_to_times":[],
-        "write_rate":[]}
+        "write_rate":[], "read_rate":[], "rw_amplify":[], "write_amplify":[], "input_data":[],
+        "output_data":[], "input_files":[], "output_files":[]}
         level_wise_counts[level] = 0
     for line in lines:
         if "compaction_started" in line:
@@ -91,18 +92,52 @@ def parse_compaction_event(lines, start_time):
             level_wise_comps[level]["input_records"].append(line["num_input_records"])
             level_wise_comps[level]["output_records"].append(line["num_output_records"])
         if "compacted to" in line:
-            index = line.find("[default]") + len("[default]") + 1 
-            index1 = line.find(" ", index)
-            compaction = int(line[index:index1])
-            read_rate = float(line.find(" ", line.find("MB/sec:") + len("MB/sec:") + 1))
-            write_rate = float(line.find(" ", line.find("rd,") + len("rd,") + 1))
+            index1 = line.find("[default]") + len("[default]") + 1 
+            index2 = line.find(" ", index1)
+            compaction = int(line[index1:index2])
+            time, level = job_to_time[compaction], job_to_level[compaction]
+            index1 = line.find("MB/sec:") + len("MB/sec:") + 1
+            index2 = line.find(" ", index1)
+            read_rate = float(line[index1:index2])
+            index1 = line.find("rd,") + len("rd,") + 1
+            index2 = line.find(" ", index1)
+            write_rate = float(line[index1:index2])
+            index1 = line.find("read-write-amplify(") + len("read-write-amplify(")
+            index2 = line.find(")", index1)
+            rw_amplify = float(line[index1:index2])
+            index1 = line.find("write-amplify(", index1) + len("write-amplify(")
+            index2 = line.find(")", index1)
+            write_amplify = float(line[index1:index2])
+            index1 = line.find("files in(") + len("files in(")
+            index2 = line.find(")", index1) 
+            input_files = int(line[index1:index2].split(", ")[0]) + int(line[index1:index2].split(", ")[1])
+            index1 = line.find("out(") + len("out(")
+            index2 = line.find(")", index1)
+            output_files = int(line[index1:index2])
+            index1 = line.find("MB in(") + len("MB in(")
+            index2 = line.find(")", index1)
+            input_data = float(line[index1:index2].split(", ")[0]) + float(line[index1:index2].split(", ")[1])
+            index1 = line.find("out(", line.find("out(")+1) + len("out(") 
+            index2 = line.find(")", index1)
+            output_data = float(line[index1:index2])
+            print(compaction, write_rate, read_rate, input_files, output_files, input_data, output_data,
+            rw_amplify, write_amplify)
+            level_wise_comps[level]["compacted_to_times"].append(((time - start_time)/1000000))
+            level_wise_comps[level]["write_rate"].append(write_rate)
+            level_wise_comps[level]["read_rate"].append(read_rate)
+            level_wise_comps[level]["rw_amplify"].append(rw_amplify)
+            level_wise_comps[level]["write_amplify"].append(write_amplify)
+            level_wise_comps[level]["input_data"].append(input_data)
+            level_wise_comps[level]["output_data"].append(output_data)
+            level_wise_comps[level]["input_files"].append(input_files)
+            level_wise_comps[level]["output_files"].append(output_files)
     
     # print(level_wise_comps[0])
     # print()
     # print(level_wise_comps[1])
     # print()
     # print(level_wise_comps[2])
-    # print(level_wise_comps)
+    print(level_wise_comps)
 
 def print_lines(lines):
     for line in lines:
@@ -111,8 +146,8 @@ def print_lines(lines):
 if __name__ == "__main__":
     print("hello")
     # lines = read_file("/tmp/rocksdbtest-20001/dbbench/LOG")
-    # lines = read_file("/mydata/rocksdb/LOG")
-    lines = read_file("/users/nithinv/rocksdbLOGS/LOG")
+    lines = read_file("/mydata/rocksdb/LOG")
+    # lines = read_file("/users/nithinv/rocksdbLOGS/LOG")
     start_time = lines[0].split()[0]
     
     # start_time = time.mktime(datetime.datetime.strptime(start_time, "%Y/%m/%d").timetuple())
