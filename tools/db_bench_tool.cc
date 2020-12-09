@@ -4503,8 +4503,7 @@ class Benchmark {
             write_bytes += key.size() + val.size();
             writes_done++;
             thread->stats.FinishedOps(nullptr, db, 1, kWrite);
-        } 
-            else if (op_prob >= 91 and op_prob <= 100 ) {
+        } else if (op_prob >= 101 and op_prob <= 200 ) {
             start_time = FLAGS_env->NowMicros();
             Status s = db->Get(options, key, &value);
             read_time += FLAGS_env->NowMicros() - start_time;
@@ -4546,9 +4545,9 @@ class Benchmark {
         printf("Writes done, reads done, total range reads, range reads done %lu, %lu, %lu, %lu\n", writes_done, reads_done, range_reads_done, seeks_found);
         double write_throughput = writes_done / workload_duration;
         double read_throughput = reads_done / workload_duration;
-        double range_read_throughput = seeks_found / (seek_time+1);
-        double write_latency = write_time / writes_done;
-        double read_latency = read_time / reads_done;
+        double range_read_throughput = seeks_found / ((seek_time+1) / 1000000);
+        double write_latency = write_time / (writes_done+1);
+        double read_latency = read_time / (reads_done+1);
         double range_read_latency = seek_time / (seeks_found+1);
         printf("Write throughput (ops/s) = %f \nRead throughput (ops/s) = %f \nRange read throughput (ops/s) = %f\nWrite latency (micros/op) = %f \nRead latency (micros/op) = %f \nRange read latency (micros/op) = %f \n", write_throughput,
         read_throughput, range_read_throughput, write_latency, read_latency, range_read_latency); 
