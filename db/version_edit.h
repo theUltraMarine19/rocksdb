@@ -13,6 +13,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <queue>
 
 #include "db/blob/blob_file_addition.h"
 #include "db/blob/blob_file_garbage.h"
@@ -104,6 +105,9 @@ struct FileDescriptor {
   uint64_t file_size;  // File size in bytes
   SequenceNumber smallest_seqno;  // The smallest seqno in this file
   SequenceNumber largest_seqno;   // The largest seqno in this file
+  std::priority_queue<SequenceNumber> maxheap;
+  std::priority_queue<SequenceNumber, std::vector<SequenceNumber>, std::greater<SequenceNumber>> minheap;
+  SequenceNumber median_seqno;
 
   FileDescriptor() : FileDescriptor(0, 0, 0) {}
 

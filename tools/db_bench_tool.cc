@@ -4511,6 +4511,10 @@ class Benchmark {
             reads_done++;
             thread->stats.FinishedOps(nullptr, db, 1, kRead);
         } else {
+            rand_key = thread->rand.Next() % (FLAGS_num / 10);
+            a = std::to_string(rand_key);
+            a += '\0';
+            key = Slice(a.c_str());
             bool key_present = false;
             int seek_bytes_local = 0;
             Iterator* iter_to_use = db->NewIterator(options);

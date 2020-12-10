@@ -37,6 +37,19 @@ void FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
   largest.DecodeFrom(key);
   fd.smallest_seqno = std::min(fd.smallest_seqno, seqno);
   fd.largest_seqno = std::max(fd.largest_seqno, seqno);
+  fd.maxheap.push(seqno);
+  fd.minheap.push(fd.maxheap.top());
+  fd.maxheap.pop();
+
+  if (fd.minheap.size() > fd.maxheap.size()) {
+    fd.maxheap.push(fd.minheap.top());
+    fd.minheap.pop();
+  }
+
+  if (fd.minheap.size() == fd.maxheap.size())
+    fd.median_seqno = (fd.maxheap.top() + fd.minheap.top()) / 2;
+  else
+    fd.median_seqno = fd.maxheap.top();
 
   if (value_type == kTypeBlobIndex) {
     BlobIndex blob_index;

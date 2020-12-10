@@ -56,6 +56,7 @@ enum CompactionPri : char {
   kMinOverlappingRatio = 0x3,
   // First compact files which have been read the least
   kReads = 0x4,
+  kOldestMedianSeqFirst = 0x5,
 };
 
 struct CompactionOptionsFIFO {

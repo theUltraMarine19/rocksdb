@@ -2931,12 +2931,19 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
                            f2.file->fd.smallest_seqno;
                   });
         break;
+      case kOldestMedianSeqFirst:
+        std::sort(temp.begin(), temp.end(),
+                  [](const Fsize& f1, const Fsize& f2) -> bool {
+                    return f1.file->fd.median_seqno <
+                           f2.file->fd.median_seqno;
+                  });
+        break;
       case kReads:
         std::sort(temp.begin(), temp.end(),
                   [](const Fsize& f1, const Fsize& f2) -> bool {
                     // printf("F1 reads: %lu, F2 reads: %lu\n", f1.file->stats.num_reads_sampled.load(), 
                     // f2.file->stats.num_reads_sampled.load());
-                    return f1.file->stats.num_reads_sampled <
+                    return f1.file->stats.num_reads_sampled >
                            f2.file->stats.num_reads_sampled;
                   });
         break;

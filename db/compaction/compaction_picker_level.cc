@@ -420,7 +420,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
 
   assert(start_level_ >= 0);
 
-  if (ioptions_.compaction_pri == kReads) {
+  if (ioptions_.compaction_pri == kReads || ioptions_.compaction_pri == kOldestMedianSeqFirst) {
     // Also sort the files to be compacted with this compaction priority
     vstorage_->UpdateFilesByCompactionPri(ioptions_.compaction_pri);
   }
