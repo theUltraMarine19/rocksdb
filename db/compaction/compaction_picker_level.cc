@@ -10,6 +10,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <stdlib.h>
+#include <time.h>
 
 #include "db/compaction/compaction_picker_level.h"
 #include "logging/log_buffer.h"
@@ -420,10 +422,15 @@ bool LevelCompactionBuilder::PickFileToCompact() {
 
   assert(start_level_ >= 0);
 
-  if (ioptions_.compaction_pri == kReads || ioptions_.compaction_pri == kOldestMedianSeqFirst) {
-    // Also sort the files to be compacted with this compaction priority
-    vstorage_->UpdateFilesByCompactionPri(ioptions_.compaction_pri);
-  }
+  // if (ioptions_.compaction_pri == kReads || ioptions_.compaction_pri == kOldestMedianSeqFirst) {
+  //   // Also sort the files to be compacted with this compaction priority
+  //   // srand(time(NULL));
+  //   // int prob = rand() % 100;
+  //   // if (prob < 90) {
+  //   //     vstorage_->UpdateFilesByCompactionPri(ioptions_.compaction_pri);
+  //   // }
+  //   vstorage_->UpdateFilesByCompactionPri(ioptions_.compaction_pri);
+  // }
 
   // Pick the largest file in this level that is not already
   // being compacted
@@ -479,7 +486,11 @@ bool LevelCompactionBuilder::PickFileToCompact() {
   }
 
   // store where to start the iteration in the next call to PickCompaction
-  vstorage_->SetNextCompactionIndex(start_level_, cmp_idx);
+  if (ioptions_.compaction_pri == kReads) {
+    vstorage_->SetNextCompactionIndex(start_level_, 0);
+  } else {
+    vstorage_->SetNextCompactionIndex(start_level_, cmp_idx);
+  }
 
   return start_level_inputs_.size() > 0;
 }

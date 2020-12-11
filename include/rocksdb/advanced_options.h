@@ -54,9 +54,10 @@ enum CompactionPri : char {
   // and its size is the smallest. It in many cases can optimize write
   // amplification.
   kMinOverlappingRatio = 0x3,
-  // First compact files which have been read the least
+  // First compact files which have been read the least/most
   kReads = 0x4,
   kOldestMedianSeqFirst = 0x5,
+  kMaxInputSize = 0x6,
 };
 
 struct CompactionOptionsFIFO {

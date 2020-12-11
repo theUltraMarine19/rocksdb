@@ -20,6 +20,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <stdlib.h>
+#include <time.h>
 
 #include "compaction/compaction.h"
 #include "db/blob/blob_file_cache.h"
@@ -2884,6 +2886,45 @@ void SortFileByOverlappingRatio(
                      file_to_order[f2.file->fd.GetNumber()];
             });
 }
+
+void SortByInputSize(
+    const InternalKeyComparator& icmp, const std::vector<FileMetaData*>& files,
+    const std::vector<FileMetaData*>& next_level_files,
+    std::vector<Fsize>* temp) {
+  std::unordered_map<uint64_t, uint64_t> file_to_order;
+  auto next_level_it = next_level_files.begin();
+
+  for (auto& file : files) {
+    uint64_t overlapping_bytes = 0;
+    // Skip files in next level that is smaller than current file
+    while (next_level_it != next_level_files.end() &&
+           icmp.Compare((*next_level_it)->largest, file->smallest) < 0) {
+      next_level_it++;
+    }
+
+    while (next_level_it != next_level_files.end() &&
+           icmp.Compare((*next_level_it)->smallest, file->largest) < 0) {
+      overlapping_bytes += (*next_level_it)->fd.file_size;
+
+      if (icmp.Compare((*next_level_it)->largest, file->largest) > 0) {
+        // next level file cross large boundary of current file.
+        break;
+      }
+      next_level_it++;
+    }
+
+    assert(file->compensated_file_size != 0);
+    file_to_order[file->fd.GetNumber()] =
+        overlapping_bytes + file->compensated_file_size;
+  }
+
+  std::sort(temp->begin(), temp->end(),
+            [&](const Fsize& f1, const Fsize& f2) -> bool {
+              return file_to_order[f1.file->fd.GetNumber()] <
+                     file_to_order[f2.file->fd.GetNumber()];
+            });
+}
+
 }  // namespace
 
 void VersionStorageInfo::UpdateFilesByCompactionPri(
@@ -2912,6 +2953,13 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     if (num > temp.size()) {
       num = temp.size();
     }
+    // if (compaction_pri == kReads) {
+    //     srand(time(NULL));
+    //     int prob = rand() % 100;
+    //     if (prob < 10) {
+    //       compaction_pri = kMinOverlappingRatio;
+    //     }
+    // }
     switch (compaction_pri) {
       case kByCompensatedSize:
         std::partial_sort(temp.begin(), temp.begin() + num, temp.end(),
@@ -2931,6 +2979,19 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
                            f2.file->fd.smallest_seqno;
                   });
         break;
+      case kMinOverlappingRatio:
+        SortFileByOverlappingRatio(*internal_comparator_, files_[level],
+                                   files_[level + 1], &temp);
+        break;
+      case kReads:
+        std::sort(temp.begin(), temp.end(),
+                  [](const Fsize& f1, const Fsize& f2) -> bool {
+                    printf("F1 reads: %lu, F2 reads: %lu\n", f1.file->stats.num_reads_sampled.load(), 
+                    f2.file->stats.num_reads_sampled.load());
+                    return f1.file->stats.num_reads_sampled >
+                           f2.file->stats.num_reads_sampled;
+                  });
+        break;
       case kOldestMedianSeqFirst:
         std::sort(temp.begin(), temp.end(),
                   [](const Fsize& f1, const Fsize& f2) -> bool {
@@ -2938,17 +2999,8 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
                            f2.file->fd.median_seqno;
                   });
         break;
-      case kReads:
-        std::sort(temp.begin(), temp.end(),
-                  [](const Fsize& f1, const Fsize& f2) -> bool {
-                    // printf("F1 reads: %lu, F2 reads: %lu\n", f1.file->stats.num_reads_sampled.load(), 
-                    // f2.file->stats.num_reads_sampled.load());
-                    return f1.file->stats.num_reads_sampled >
-                           f2.file->stats.num_reads_sampled;
-                  });
-        break;
-      case kMinOverlappingRatio:
-        SortFileByOverlappingRatio(*internal_comparator_, files_[level],
+      case kMaxInputSize:
+        SortByInputSize(*internal_comparator_, files_[level],
                                    files_[level + 1], &temp);
         break;
       default:
