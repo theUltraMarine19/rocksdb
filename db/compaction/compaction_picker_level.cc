@@ -422,15 +422,15 @@ bool LevelCompactionBuilder::PickFileToCompact() {
 
   assert(start_level_ >= 0);
 
-  // if (ioptions_.compaction_pri == kReads || ioptions_.compaction_pri == kOldestMedianSeqFirst) {
-  //   // Also sort the files to be compacted with this compaction priority
-  //   // srand(time(NULL));
-  //   // int prob = rand() % 100;
-  //   // if (prob < 90) {
-  //   //     vstorage_->UpdateFilesByCompactionPri(ioptions_.compaction_pri);
-  //   // }
-  //   vstorage_->UpdateFilesByCompactionPri(ioptions_.compaction_pri);
-  // }
+  if (ioptions_.compaction_pri == kReads || ioptions_.compaction_pri == kOldestMedianSeqFirst) {
+    // Also sort the files to be compacted with this compaction priority
+    // srand(time(NULL));
+    // int prob = rand() % 100;
+    // if (prob < 90) {
+    //     vstorage_->UpdateFilesByCompactionPri(ioptions_.compaction_pri);
+    // }
+    vstorage_->UpdateFilesByCompactionPri(ioptions_.compaction_pri);
+  }
 
   // Pick the largest file in this level that is not already
   // being compacted

@@ -72,6 +72,8 @@
 #include "utilities/merge_operators/bytesxor.h"
 #include "utilities/merge_operators/sortlist.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
+#include "util/zipf.h"
+#include "util/latest_generator.h"
 
 #ifdef MEMKIND
 #include "memory/memkind_kmem_allocator.h"
@@ -92,6 +94,12 @@ DEFINE_string(
     "fillsync,"
     "fillrandom,"
     "fillrandomcustom,"
+    "ycsbwklda,"
+    "ycsbwkldb,"
+    "ycsbwkldc,"
+    "ycsbwkldd,"
+    "ycsbwklde,"
+    "ycsbwkldf,"
     "filluniquerandomdeterministic,"
     "overwrite,"
     "readrandom,"
@@ -697,6 +705,8 @@ DEFINE_int32(level0_file_num_compaction_trigger,
              ROCKSDB_NAMESPACE::Options().level0_file_num_compaction_trigger,
              "Number of files in level-0"
              " when compactions start");
+
+DEFINE_bool(YCSB_uniform_distribution, false, "Uniform key distribution for YCSB");
 
 DEFINE_uint64(periodic_compaction_seconds,
               ROCKSDB_NAMESPACE::Options().periodic_compaction_seconds,
@@ -3165,8 +3175,10 @@ class Benchmark {
       } else if (name == "fillrandomcustom") {
         fresh_db = true;
         method = &Benchmark::FillRandomCustom;
-      }
-      else if (name == "longpeak") {
+      } else if (name == "ycsbwklda") {
+        fresh_db = true;
+        method = &Benchmark::YCSBWorkloadA;
+      } else if (name == "longpeak") {
         method = &Benchmark::LongPeakTest;
       } else if (name == "filluniquerandom") {
         fresh_db = true;
@@ -4556,6 +4568,80 @@ class Benchmark {
         printf("Write throughput (ops/s) = %f \nRead throughput (ops/s) = %f \nRange read throughput (ops/s) = %f\nWrite latency (micros/op) = %f \nRead latency (micros/op) = %f \nRange read latency (micros/op) = %f \n", write_throughput,
         read_throughput, range_read_throughput, write_latency, read_latency, range_read_latency); 
     }
+
+  void YCSBWorkloadA(ThreadState* thread) {
+    ReadOptions options(FLAGS_verify_checksum, true);
+    RandomGenerator gen;
+    // init_latestgen(FLAGS_num);
+    // init_zipf_generator(0, FLAGS_num);
+    
+    std::string value;
+    int64_t found = 0;
+    std::string a;
+
+    int64_t reads_done = 0;
+    int64_t writes_done = 0;
+    Duration duration(FLAGS_duration, 0);
+
+    std::unique_ptr<const char[]> key_guard;
+    Slice key = AllocateKey(&key_guard);
+
+    if (FLAGS_benchmark_write_rate_limit > 0) {
+       printf(">>>> FLAGS_benchmark_write_rate_limit YCSBA \n");
+      thread->shared->write_rate_limiter.reset(
+          NewGenericRateLimiter(FLAGS_benchmark_write_rate_limit));
+    }
+
+    // the number of iterations is the larger of read_ or write_
+    while (!duration.Done(1)) {
+      DB* db = SelectDB(thread);
+       
+          long k;
+          if (FLAGS_YCSB_uniform_distribution){
+            //Generate number from uniform distribution            
+            k = thread->rand.Next() % FLAGS_num;
+          } else { //default
+            //Generate number from zipf distribution
+            // k = nextValue() % FLAGS_num;      
+            k = 1;      
+          }
+          a = std::to_string(k);
+          a += '\0';
+          key = Slice(a.c_str());
+
+          int next_op = thread->rand.Next() % 100;
+          if (next_op < 50){
+            //read
+            Status s = db->Get(options, key, &value);
+            if (!s.ok() && !s.IsNotFound()) {
+              //fprintf(stderr, "k=%d; get error: %s\n", k, s.ToString().c_str());
+              //exit(1);
+              // we continue after error rather than exiting so that we can
+              // find more errors if any
+            } else if (!s.IsNotFound()) {
+              found++;
+              thread->stats.FinishedOps(nullptr, db, 1, kRead);
+            }
+            reads_done++;
+            
+          } else{
+            //write
+            Status s = db->Put(write_options_, key, gen.Generate(FLAGS_value_size));
+            if (!s.ok()) {
+              //fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+              //exit(1);
+            } else{
+             writes_done++;
+             thread->stats.FinishedOps(nullptr, db, 1, kWrite);
+            }                
+      }
+    } 
+    char msg[100];
+    snprintf(msg, sizeof(msg), "( reads:%" PRIu64 " writes:%" PRIu64 \
+             " total:%" PRIu64 " found:%" PRIu64 ")",
+             reads_done, writes_done, readwrites_, found);
+    thread->stats.AddMessage(msg);
+  }
 
 
 void LongPeakTest(ThreadState* thread) {
@@ -7831,6 +7917,8 @@ int db_bench_tool(int argc, char** argv) {
   }
 
   ROCKSDB_NAMESPACE::Benchmark benchmark;
+  // init_zipf_generator(0, FLAGS_num);
+  // init_latestgen(FLAGS_num);
   benchmark.Run();
 
 #ifndef ROCKSDB_LITE
