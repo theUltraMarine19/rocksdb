@@ -2928,6 +2928,67 @@ void SortByInputSize(
             });
 }
 
+void SortByEffectiveReads(
+    const InternalKeyComparator& icmp, const std::vector<FileMetaData*>& files,
+    const std::vector<FileMetaData*>& next_level_files,
+    std::vector<Fsize>* temp) {
+  std::unordered_map<uint64_t, uint64_t> file_to_order;
+  std::unordered_map<uint64_t, uint64_t> file_to_reads;
+  std::unordered_map<uint64_t, uint64_t> file_to_total_files;
+  int num_files = 0;
+  auto next_level_it = next_level_files.begin();
+
+  for (auto& file : files) {
+    uint64_t overlapping_bytes = 0;
+    uint64_t total_reads = 0;
+    // Skip files in next level that is smaller than current file
+    while (next_level_it != next_level_files.end() &&
+           icmp.Compare((*next_level_it)->largest, file->smallest) < 0) {
+      next_level_it++;
+    }
+
+    while (next_level_it != next_level_files.end() &&
+           icmp.Compare((*next_level_it)->smallest, file->largest) < 0) {
+      overlapping_bytes += (*next_level_it)->fd.file_size;
+      total_reads += (*next_level_it)->stats.num_reads_sampled;
+      num_files += 1;
+
+      if (icmp.Compare((*next_level_it)->largest, file->largest) > 0) {
+        // next level file cross large boundary of current file.
+        break;
+      }
+      next_level_it++;
+    }
+
+    assert(file->compensated_file_size != 0);
+    file_to_order[file->fd.GetNumber()] =
+        overlapping_bytes + file->compensated_file_size;
+    file_to_reads[file->fd.GetNumber()] = 
+        total_reads + file->stats.num_reads_sampled;
+    file_to_total_files[file->fd.GetNumber()] = 
+        num_files + 1;
+  }
+
+  std::sort(temp->begin(), temp->end(),
+            [&](const Fsize& f1, const Fsize& f2) -> bool {
+              // printf("F1 size %lu, F2 size %lu\n", file_to_order[f1.file->fd.GetNumber()],
+              // file_to_order[f2.file->fd.GetNumber()]);
+              int total_reads_f1 = file_to_reads[f1.file->fd.GetNumber()];
+              int total_reads_f2 = file_to_reads[f2.file->fd.GetNumber()];
+              if (total_reads_f1 == total_reads_f2) {
+                  // return file_to_order[f1.file->fd.GetNumber()] <
+                  //     file_to_order[f2.file->fd.GetNumber()];
+                  return f1.file->fd.smallest_seqno < 
+                            f2.file->fd.smallest_seqno;
+              } else {
+                // int num_file1 = file_to_total_files[f1.file->fd.GetNumber()];
+                // int num_file2 = file_to_total_files[f2.file->fd.GetNumber()];
+                // return (total_reads_f1 / num_file1) > (total_reads_f2 / num_file2);
+                return total_reads_f1 > total_reads_f2;
+              }
+            });
+}
+
 }  // namespace
 
 void VersionStorageInfo::UpdateFilesByCompactionPri(
@@ -2991,16 +3052,14 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
         // std::unordered_map<uint64_t, uint64_t> file_to_order = SortFileByOverlappingRatio(*internal_comparator_, files_[level],
         //                            files_[level + 1], &temp);
         std::sort(temp.begin(), temp.end(),
-                  [](const Fsize& f1, const Fsize& f2) -> bool {
+                  [&](const Fsize& f1, const Fsize& f2) -> bool {
                     // printf("F1 reads: %lu, F2 reads: %lu\n", f1.file->stats.num_reads_sampled.load(), 
                     // f2.file->stats.num_reads_sampled.load());
                     if (f1.file->stats.num_reads_sampled == f2.file->stats.num_reads_sampled) {
-                      // return f1.file->fd.smallest_seqno < 
-                      //       f2.file->fd.smallest_seqno;
+                      return f1.file->fd.smallest_seqno < 
+                            f2.file->fd.smallest_seqno;
                       // return file_to_order[f1.file->fd.GetNumber()] <
                       // file_to_order[f2.file->fd.GetNumber()];
-                      return f1.file->fd.smallest_seqno <
-                           f2.file->fd.smallest_seqno;
                     } else {
                       return f1.file->stats.num_reads_sampled >
                             f2.file->stats.num_reads_sampled;
@@ -3017,6 +3076,10 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
         break;
       case kMaxInputSize:
         SortByInputSize(*internal_comparator_, files_[level],
+                                   files_[level + 1], &temp);
+        break;
+      case KReadsEffective:
+        SortByEffectiveReads(*internal_comparator_, files_[level],
                                    files_[level + 1], &temp);
         break;
       default:

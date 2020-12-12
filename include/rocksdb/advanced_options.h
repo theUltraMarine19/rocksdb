@@ -58,6 +58,7 @@ enum CompactionPri : char {
   kReads = 0x4,
   kOldestMedianSeqFirst = 0x5,
   kMaxInputSize = 0x6,
+  KReadsEffective = 0x7, 
 };
 
 struct CompactionOptionsFIFO {

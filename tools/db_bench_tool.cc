@@ -4481,9 +4481,24 @@ class Benchmark {
 
     DB* db = SelectDB(thread);
     db->GetOptions().rate_limiter->SetBytesPerSecond(FLAGS_rate_limiter_bytes_per_sec);
-    // if (!thread->init){ 
-    //     thread->init = true;
-    // }
+    
+    for (int i = 0; i < FLAGS_num; i++) {
+      int val_size = FLAGS_value_size;
+      std::unique_ptr<const char[]> key_guard;
+      Slice key = AllocateKey(&key_guard);
+      std::string a;
+      int rand_key = i;
+      a = std::to_string(rand_key);
+      a += '\0';
+      key = Slice(a.c_str()); 
+      Slice val = gen.Generate(val_size);
+      Status s = db->Put(write_options_, key, val);
+      if (!s.ok()) {
+          fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+          exit(1);
+      }
+    }
+
     double workload_start_time = FLAGS_env->NowMicros();
     while (!duration.Done(1)) {
         int val_size = FLAGS_value_size;;
@@ -4506,7 +4521,7 @@ class Benchmark {
 
         int op_prob = thread->rand.Next() % 100;
 
-        if (op_prob <= 80) {
+        if (op_prob <= 50) {
             start_time = FLAGS_env->NowMicros();
             Slice val = gen.Generate(pair_val_time.first);
             Status s = db->Put(write_options_, key, val);
