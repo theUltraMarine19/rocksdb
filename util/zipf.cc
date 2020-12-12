@@ -1,4 +1,4 @@
-#include "zipf.h"
+#include "util/zipf.h"
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>

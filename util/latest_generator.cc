@@ -1,5 +1,5 @@
-#include "zipf.h"
-#include "latest-generator.h"
+#include "util/zipf.h"
+#include "util/latest_generator.h"
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
