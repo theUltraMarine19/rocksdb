@@ -4589,7 +4589,7 @@ class Benchmark {
     // int64_t read_bytes = 0;
     int64_t seek_bytes = 0;
     double write_time = 0;
-    double read_time = 0;
+    // double read_time = 0;
     double seek_time = 0;
     double start_time = 0;
     double end_time = 0;
@@ -4597,87 +4597,87 @@ class Benchmark {
     DB* db = SelectDB(thread);
     db->GetOptions().rate_limiter->SetBytesPerSecond(FLAGS_rate_limiter_bytes_per_sec);
     double workload_start_time = FLAGS_env->NowMicros();
-    for (int i=0; i<10; i++) {
-      duration = Duration(FLAGS_duration, readwrites_/10);
+    for (int i=0; i<2; i++) {
+      duration = Duration(FLAGS_duration, readwrites_);
       while (!duration.Done(1)) {
-        int val_size = FLAGS_value_size;
-        std::unique_ptr<const char[]> key_guard;
-        Slice key = AllocateKey(&key_guard);
+        int op_prob = thread->rand.Next() % 100;
+        if (op_prob < 40) {
+          int val_size = FLAGS_value_size;
+          std::unique_ptr<const char[]> key_guard;
+          Slice key = AllocateKey(&key_guard);
 
-        std::string a;
-        int rand_key = thread->rand.Next() % FLAGS_num;
+          std::string a;
+          int rand_key = (thread->rand.Next() % FLAGS_num) + FLAGS_num*i;
 
-        //GenerateKeyFromInt(rand_key, FLAGS_num, &key);
-        a = std::to_string(rand_key);
-        a += '\0';
-        key = Slice(a.c_str()); 
-        start_time = FLAGS_env->NowMicros();
-        Slice val = gen.Generate(val_size);
-        Status s = db->Put(write_options_, key, val);
-        if (!s.ok()) {
-            fprintf(stderr, "put error: %s\n", s.ToString().c_str());
-            exit(1);
-        }
-        end_time = FLAGS_env->NowMicros();
-        write_time += end_time - start_time;
-        write_bytes += key.size() + val.size();
-        writes_done++;
-        thread->stats.FinishedOps(nullptr, db, 1, kWrite);
-    } 
-    // double write_workload_duration = (FLAGS_env->NowMicros() - workload_start_time) / 1000000;
-    // workload_start_time = FLAGS_env->NowMicros();
-    // Slice begin("1\0");
-    // Slice end("100000001\0");
-    // CompactRangeOptions compact_options;
-    // Status s = db->CompactRange(compact_options, &begin, &end);
-    // duration = Duration(FLAGS_duration, readwrites_);
-    while (!duration.Done(1)) {
-        std::unique_ptr<const char[]> key_guard;
-        Slice key = AllocateKey(&key_guard);
-        int rand_key = thread->rand.Next() % (FLAGS_num);
-        std::string a = std::to_string(rand_key);
-        a += '\0';
-        key = Slice(a.c_str());
-        bool key_present = false;
-        int seek_bytes_local = 0;
-        Iterator* iter_to_use = db->NewIterator(options);
-        iter_to_use->Seek(key);
-        range_reads_done++;
-        if (iter_to_use->Valid() && iter_to_use->key().compare(key) == 0) {
-          seeks_found++;
-          key_present = true;
+          //GenerateKeyFromInt(rand_key, FLAGS_num, &key);
+          a = std::to_string(rand_key);
+          a += '\0';
+          key = Slice(a.c_str()); 
           start_time = FLAGS_env->NowMicros();
-        }
+          Slice val = gen.Generate(val_size);
+          Status s = db->Put(write_options_, key, val);
+          if (!s.ok()) {
+              fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+              exit(1);
+          }
+          end_time = FLAGS_env->NowMicros();
+          write_time += end_time - start_time;
+          write_bytes += key.size() + val.size();
+          writes_done++;
+          thread->stats.FinishedOps(nullptr, db, 1, kWrite);
+        } else if (i > 0) {
+          // double write_workload_duration = (FLAGS_env->NowMicros() - workload_start_time) / 1000000;
+          // workload_start_time = FLAGS_env->NowMicros();
+          // Slice begin("1\0");
+          // Slice end("100000001\0");
+          // CompactRangeOptions compact_options;
+          // Status s = db->CompactRange(compact_options, &begin, &end);
+          // duration = Duration(FLAGS_duration, readwrites_);
+          std::unique_ptr<const char[]> key_guard;
+          Slice key = AllocateKey(&key_guard);
+          int rand_key = (thread->rand.Next() % FLAGS_num) + FLAGS_num*(i-1);
+          std::string a = std::to_string(rand_key);
+          a += '\0';
+          key = Slice(a.c_str());
+          bool key_present = false;
+          int seek_bytes_local = 0;
+          Iterator* iter_to_use = db->NewIterator(options);
+          iter_to_use->Seek(key);
+          range_reads_done++;
+          if (iter_to_use->Valid() && iter_to_use->key().compare(key) == 0) {
+            seeks_found++;
+            key_present = true;
+            start_time = FLAGS_env->NowMicros();
+          }
 
-        for (int j = 0; j < FLAGS_seek_nexts && iter_to_use->Valid(); ++j) {
-          // Copy out iterator's value to make sure we read them.
-          Slice value1 = iter_to_use->value();
-          memcpy(value_buffer, value1.data(),
-                  std::min(value1.size(), sizeof(value_buffer)));
-          seek_bytes_local += iter_to_use->key().size() + iter_to_use->value().size();
-          iter_to_use->Next();
-          assert(iter_to_use->status().ok());
-        }
+          for (int j = 0; j < FLAGS_seek_nexts && iter_to_use->Valid(); ++j) {
+            // Copy out iterator's value to make sure we read them.
+            Slice value1 = iter_to_use->value();
+            memcpy(value_buffer, value1.data(),
+                    std::min(value1.size(), sizeof(value_buffer)));
+            seek_bytes_local += iter_to_use->key().size() + iter_to_use->value().size();
+            iter_to_use->Next();
+            assert(iter_to_use->status().ok());
+          }
 
-        if (key_present) {
-          seek_time += FLAGS_env->NowMicros() - start_time;
-          seek_bytes += seek_bytes_local;
+          if (key_present) {
+            seek_time += FLAGS_env->NowMicros() - start_time;
+            seek_bytes += seek_bytes_local;
+          }
+          thread->stats.FinishedOps(nullptr, db, 1, kSeek);
         }
-        thread->stats.FinishedOps(nullptr, db, 1, kSeek);
       }
     }
 
-      double seek_workload_duration = (FLAGS_env->NowMicros() - workload_start_time) / 1000000;
+      double workload_duration = (FLAGS_env->NowMicros() - workload_start_time) / 1000000;
       printf("Writes done, reads done, total range reads, range reads done %lu, %lu, %lu, %lu\n", writes_done, reads_done, range_reads_done, seeks_found);
-      double write_throughput = writes_done / write_workload_duration;
-      double read_throughput = reads_done / write_workload_duration;
+      double write_throughput = writes_done / workload_duration;
       double range_read_throughput = seeks_found / ((seek_time+1) / 1000000);
-      double range_read_throughput_2 = seeks_found / seek_workload_duration;
+      double range_read_throughput_2 = seeks_found / workload_duration;
       double write_latency = write_time / (writes_done+1);
-      double read_latency = read_time / (reads_done+1);
       double range_read_latency = seek_time / (seeks_found+1);
-      printf("Write throughput (ops/s) = %f \nRead throughput (ops/s) = %f \nRange read throughput (ops/s) = %f\nWrite latency (micros/op) = %f \nRead latency (micros/op) = %f \nRange read latency (micros/op) = %f \n Range read throughput 2 (ops/s) = %f \n", write_throughput,
-      read_throughput, range_read_throughput, write_latency, read_latency, range_read_latency, range_read_throughput_2); 
+      printf("Write throughput (ops/s) = %f \nRange read throughput (ops/s) = %f\nWrite latency (micros/op) = %f \nRange read latency (micros/op) = %f \nRange read throughput 2 (ops/s) = %f \n", write_throughput,
+      range_read_throughput, write_latency, range_read_latency, range_read_throughput_2); 
   }
 
   void YCSBWorkloadA(ThreadState* thread) {
