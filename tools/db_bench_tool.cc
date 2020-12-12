@@ -4506,7 +4506,7 @@ class Benchmark {
 
         int op_prob = thread->rand.Next() % 100;
 
-        if (op_prob <= 100) {
+        if (op_prob <= 80) {
             start_time = FLAGS_env->NowMicros();
             Slice val = gen.Generate(pair_val_time.first);
             Status s = db->Put(write_options_, key, val);
@@ -4527,7 +4527,7 @@ class Benchmark {
             reads_done++;
             thread->stats.FinishedOps(nullptr, db, 1, kRead);
         } else {
-            rand_key = thread->rand.Next() % (FLAGS_num / 100);
+            rand_key = thread->rand.Next() % (FLAGS_num / 10);
             a = std::to_string(rand_key);
             a += '\0';
             key = Slice(a.c_str());
@@ -4597,7 +4597,9 @@ class Benchmark {
     DB* db = SelectDB(thread);
     db->GetOptions().rate_limiter->SetBytesPerSecond(FLAGS_rate_limiter_bytes_per_sec);
     double workload_start_time = FLAGS_env->NowMicros();
-    while (!duration.Done(1)) {
+    for (int i=0; i<10; i++) {
+      duration = Duration(FLAGS_duration, readwrites_/10);
+      while (!duration.Done(1)) {
         int val_size = FLAGS_value_size;
         std::unique_ptr<const char[]> key_guard;
         Slice key = AllocateKey(&key_guard);
@@ -4622,14 +4624,17 @@ class Benchmark {
         writes_done++;
         thread->stats.FinishedOps(nullptr, db, 1, kWrite);
     } 
-    double write_workload_duration = (FLAGS_env->NowMicros() - workload_start_time) / 1000000;
-    workload_start_time = FLAGS_env->NowMicros();
-
-    duration = Duration(FLAGS_duration, readwrites_ / 10);
+    // double write_workload_duration = (FLAGS_env->NowMicros() - workload_start_time) / 1000000;
+    // workload_start_time = FLAGS_env->NowMicros();
+    // Slice begin("1\0");
+    // Slice end("100000001\0");
+    // CompactRangeOptions compact_options;
+    // Status s = db->CompactRange(compact_options, &begin, &end);
+    // duration = Duration(FLAGS_duration, readwrites_);
     while (!duration.Done(1)) {
         std::unique_ptr<const char[]> key_guard;
         Slice key = AllocateKey(&key_guard);
-        int rand_key = thread->rand.Next() % (FLAGS_num / 10);
+        int rand_key = thread->rand.Next() % (FLAGS_num);
         std::string a = std::to_string(rand_key);
         a += '\0';
         key = Slice(a.c_str());
@@ -4660,6 +4665,7 @@ class Benchmark {
         }
         thread->stats.FinishedOps(nullptr, db, 1, kSeek);
       }
+    }
 
       double seek_workload_duration = (FLAGS_env->NowMicros() - workload_start_time) / 1000000;
       printf("Writes done, reads done, total range reads, range reads done %lu, %lu, %lu, %lu\n", writes_done, reads_done, range_reads_done, seeks_found);
