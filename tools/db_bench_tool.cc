@@ -4581,11 +4581,12 @@ class Benchmark {
         double write_throughput = writes_done / workload_duration;
         double read_throughput = reads_done / workload_duration;
         double range_read_throughput = seeks_found / ((seek_time+1) / 1000000);
+        double range_read_throughput_2 = seeks_found / workload_duration;
         double write_latency = write_time / (writes_done+1);
         double read_latency = read_time / (reads_done+1);
         double range_read_latency = seek_time / (seeks_found+1);
-        printf("Write throughput (ops/s) = %f \nRead throughput (ops/s) = %f \nRange read throughput (ops/s) = %f\nWrite latency (micros/op) = %f \nRead latency (micros/op) = %f \nRange read latency (micros/op) = %f \n", write_throughput,
-        read_throughput, range_read_throughput, write_latency, read_latency, range_read_latency); 
+        printf("Write throughput (ops/s) = %f \nRead throughput (ops/s) = %f \nRange read throughput (ops/s) = %f\nWrite latency (micros/op) = %f \nRead latency (micros/op) = %f \nRange read latency (micros/op) = %f \nRange read throughput 2 = %f\n", write_throughput,
+        read_throughput, range_read_throughput, write_latency, read_latency, range_read_latency, range_read_throughput_2); 
     }
 
   void FillRandomCustom2(ThreadState* thread) {
